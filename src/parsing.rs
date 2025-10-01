@@ -3,6 +3,8 @@ use crate::{
     TokenStream
 };
 
+use std::rc::Rc;
+
 #[derive(Debug, Copy, Clone)]
 pub enum Op {
     Add,
@@ -34,6 +36,7 @@ pub enum Statement {
 #[derive(Debug)]
 pub enum Expr {
     IntLiteral(i64),
+    Identifier(Rc<str>),
     BinaryOp { 
         op: Op,
         left: Box<Expr>,
@@ -94,6 +97,7 @@ impl Parser {
     pub fn parse_expression(&mut self, min_bp: f32) -> Expr {
         let mut left = match self.tokens.next() {
             Token::IntLiteral(i) => Expr::IntLiteral(i),
+            Token::Identifier(i) => Expr::Identifier(i),
             Token::LParen => {
                 let lhs = self.parse_expression( 0.0);
                 assert_eq!(self.tokens.next(), Token::RParen);
