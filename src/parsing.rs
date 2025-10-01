@@ -138,4 +138,3 @@ fn infix_binding_power(op: Op) -> (f32, f32) {
         _ => panic!("Invalid operator: {op}"),
     }
 }
-
