@@ -13,6 +13,7 @@ pub enum Op {
     Subtract,
     LParen,
     RParen,
+    Equals,
 }
 
 impl std::fmt::Display for Op {
@@ -24,13 +25,18 @@ impl std::fmt::Display for Op {
             Op::Subtract => write!(f, "-"),
             Op::LParen => write!(f, "("),
             Op::RParen => write!(f, ")"),
+            Op::Equals => write!(f, "="),
         }
     }
 }
 
 #[derive(Debug)]
 pub enum Statement {
-    Print(Expr)
+    Print(Expr),
+    Assignment {
+        identifier: Rc<str>,
+        value: Expr,
+    }
 }
 
 #[derive(Debug)]
@@ -46,18 +52,23 @@ pub enum Expr {
 
 #[derive(Debug)]
 pub struct Program {
-    statements: Vec<Statement>,
+    pub statements: Vec<Statement>,
 }
 
 impl Program {
+    pub fn new() -> Self {
+        Self {
+            statements: vec![]
+        }
+    }
+
     pub fn add_statement(&mut self, statement: Statement) {
         self.statements.push(statement);
     }
 }
 
 pub struct Parser {
-    tokens: TokenStream,
-    ast: Program
+    tokens: TokenStream
 }
 
 impl Parser {
@@ -65,9 +76,6 @@ impl Parser {
         let temp = TokenStream::new(vec![]);
         Self {
             tokens: temp,
-            ast: Program {
-                statements: vec![]
-            }
         }
     }
 
@@ -75,14 +83,16 @@ impl Parser {
         self.tokens = tokens;
     }
 
-    pub fn parse(&mut self) {
+    pub fn parse(&mut self) -> Program {
+        let mut ast = Program::new();
+
         loop {
             let current_token = self.tokens.next();
             
             match current_token {
                 Token::KwPrint => {
                     let expr = self.parse_expression(0.0);
-                    self.ast.add_statement(Statement::Print(expr));
+                    ast.add_statement(Statement::Print(expr));
                     continue;
                 },
                 Token::Eof => break,
@@ -91,7 +101,7 @@ impl Parser {
             }
         }
 
-        println!("{:#?}", self.ast);
+        ast
     }
 
     pub fn parse_expression(&mut self, min_bp: f32) -> Expr {

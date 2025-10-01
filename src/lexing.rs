@@ -112,7 +112,6 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        println!("{identifier}");
         Rc::from(identifier)
     }
 }

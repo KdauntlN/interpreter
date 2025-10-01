@@ -17,4 +17,5 @@ fn main() {
 
     let mut interpreter = Interpreter::new(&content);
     interpreter.build_ast();
+    interpreter.run();
 }
