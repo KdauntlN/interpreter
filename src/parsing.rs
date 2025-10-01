@@ -11,6 +11,7 @@ pub enum Op {
     Mult,
     Divide,
     Subtract,
+    Negate,
     LParen,
     RParen,
     Equals,
@@ -22,7 +23,7 @@ impl std::fmt::Display for Op {
             Op::Add => write!(f, "+"),
             Op::Mult => write!(f, "*"),
             Op::Divide => write!(f, "/"),
-            Op::Subtract => write!(f, "-"),
+            Op::Subtract | Op::Negate => write!(f, "-"),
             Op::LParen => write!(f, "("),
             Op::RParen => write!(f, ")"),
             Op::Equals => write!(f, "="),
@@ -47,6 +48,10 @@ pub enum Expr {
         op: Op,
         left: Box<Expr>,
         right: Box<Expr>
+    },
+    UnaryOp {
+        op: Op,
+        value: Box<Expr>,
     }
 }
 
@@ -105,16 +110,8 @@ impl Parser {
     }
 
     pub fn parse_expression(&mut self, min_bp: f32) -> Expr {
-        let mut left = match self.tokens.next() {
-            Token::IntLiteral(i) => Expr::IntLiteral(i),
-            Token::Identifier(i) => Expr::Identifier(i),
-            Token::LParen => {
-                let lhs = self.parse_expression( 0.0);
-                assert_eq!(self.tokens.next(), Token::RParen);
-                lhs
-            },
-            t => panic!("Got \"{t}\', expected int"),
-        };
+        let next_token = self.tokens.next();
+        let mut left = self.null_denotation(next_token);
 
         loop {
             let op = match self.tokens.peek() {
@@ -140,6 +137,24 @@ impl Parser {
         };
 
         left
+    }
+
+    fn null_denotation(&mut self, token: Token) -> Expr {
+        match token {
+            Token::IntLiteral(i) => Expr::IntLiteral(i),
+            Token::Identifier(i) => Expr::Identifier(i),
+            Token::Subtract => {
+                let next_token = self.tokens.next();
+                let value = self.null_denotation(next_token);
+                Expr::UnaryOp { op: Op::Negate, value: Box::new(value) }
+            }
+            Token::LParen => {
+                let lhs = self.parse_expression( 0.0);
+                assert_eq!(self.tokens.next(), Token::RParen);
+                lhs
+            },
+            t => panic!("Got \"{t}\', expected int"),
+        }
     }
 }
 

@@ -83,6 +83,13 @@ fn evaluate_expr(expr: &mut Expr) -> i64 {
                 _ => unreachable!(),
             }
         },
+        Expr::UnaryOp { op, value } => {
+            let value = evaluate_expr(value);
+            match op {
+                Op::Negate => value * -1,
+                _ => panic!("Unexpected token"),
+            }
+        }
         _ => panic!("Not implemented"),
     }
 }
