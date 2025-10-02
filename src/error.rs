@@ -40,7 +40,7 @@ impl Error {
                 message.push(format!("unexpected token '{}' in '{}' at line {}, column {}", provided, self.filename, self.line, self.col));
                 message.push(format!("{:>width$} |", " ", width = width));
                 message.push(format!("{} | {}", self.line, line));
-                message.push(format!("{:>width$} | {}", " ", "^".repeat(*token_length as usize), width = width));
+                message.push(format!("{space:>width$} | {carets:>padding$}", space = " ", carets = "^".repeat(*token_length as usize), width = width, padding = (self.col -1) as usize));
 
                 message.join("\n")
             },

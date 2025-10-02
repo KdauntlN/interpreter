@@ -77,15 +77,20 @@ impl<'a> Lexer<'a> {
         while let Some(c) = self.chars.next() {
             if c.is_ascii_digit() {
                 let (int, length) = self.build_int(c);
+                col += length;
                 tokens.push(Token::new(TokenKind::IntLiteral(int), line_number, col, length));
+                continue;
             }
 
             if c.is_ascii_alphabetic() || c == '_' {
                 let ident = self.build_ident(c);
+                let len = ident.len() as i32;
+                col += len;
                 match find_keyword(&ident) {
-                    Some(keyword) => tokens.push(Token::new(keyword, line_number, col, ident.len() as i32)),
-                    None => tokens.push(Token::new(TokenKind::Identifier(ident.clone()), line_number, col, ident.len() as i32)),
+                    Some(keyword) => tokens.push(Token::new(keyword, line_number, col, len)),
+                    None => tokens.push(Token::new(TokenKind::Identifier(ident.clone()), line_number, col, len)),
                 }
+                continue;
             }
 
             if c == '\n' {
@@ -107,7 +112,6 @@ impl<'a> Lexer<'a> {
                 },
             });
 
-            col += 1;
             continue;
 
         }
