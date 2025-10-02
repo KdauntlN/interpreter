@@ -1,5 +1,9 @@
 use crate::{
-    lexing::Token,
+    lexing::{
+        Token,
+        TokenKind
+    },
+    error::Error,
     TokenStream
 };
 
@@ -73,13 +77,15 @@ impl Program {
 }
 
 pub struct Parser {
+    filename: Rc<str>,
     tokens: TokenStream
 }
 
 impl Parser {
-    pub fn new() -> Self {
-        let temp = TokenStream::new(vec![]);
+    pub fn new(filename: Rc<str>) -> Self {
+        let temp = TokenStream::new(vec![], 0, 0);
         Self {
+            filename,
             tokens: temp,
         }
     }
@@ -88,40 +94,41 @@ impl Parser {
         self.tokens = tokens;
     }
 
-    pub fn parse(&mut self) -> Program {
+    pub fn parse(&mut self) -> Result<Program, Error> {
         let mut ast = Program::new();
 
         loop {
             let current_token = self.tokens.next();
             
-            match current_token {
-                Token::KwPrint => {
-                    let expr = self.parse_expression(0.0);
+            match &current_token.kind {
+                TokenKind::KwPrint => {
+                    let expr = self.parse_expression(0.0)?;
                     ast.add_statement(Statement::Print(expr));
                     continue;
                 },
-                Token::Eof => break,
-                Token::Semicolon => continue,
-                _ => panic!("Unexpected token: {current_token:#?}"),
+                TokenKind::Eof => break,
+                TokenKind::Semicolon => continue,
+                _ => return Err(Error::wrong_token(self.filename.clone(), current_token)),
             }
         }
 
-        ast
+        Ok(ast)
     }
 
-    pub fn parse_expression(&mut self, min_bp: f32) -> Expr {
+    pub fn parse_expression(&mut self, min_bp: f32) -> Result<Expr, Error> {
         let next_token = self.tokens.next();
-        let mut left = self.null_denotation(next_token);
+        let mut left = self.null_denotation(next_token)?;
 
         loop {
-            let op = match self.tokens.peek() {
-                Token::Semicolon => break,
-                Token::RParen => break,
-                Token::Plus => Op::Add,
-                Token::Subtract => Op::Subtract,
-                Token::Times => Op::Mult,
-                Token::Divide => Op::Divide,
-                t => panic!("Unexpected token: \"{t}\", expected infix operator"),
+            let next_token = self.tokens.peek();
+            let op = match next_token.kind {
+                TokenKind::Semicolon => break,
+                TokenKind::RParen => break,
+                TokenKind::Plus => Op::Add,
+                TokenKind::Subtract => Op::Subtract,
+                TokenKind::Times => Op::Mult,
+                TokenKind::Divide => Op::Divide,
+                _ => return Err(Error::wrong_token(self.filename.clone(), next_token)),
             };
 
             let (l_bp, r_bp) = infix_binding_power(op);
@@ -132,28 +139,28 @@ impl Parser {
 
             self.tokens.next();
 
-            let right = self.parse_expression( r_bp);
+            let right = self.parse_expression( r_bp)?;
             left = Expr::BinaryOp { op, left: Box::new(left), right: Box::new(right) };
         };
 
-        left
+        Ok(left)
     }
 
-    fn null_denotation(&mut self, token: Token) -> Expr {
-        match token {
-            Token::IntLiteral(i) => Expr::IntLiteral(i),
-            Token::Identifier(i) => Expr::Identifier(i),
-            Token::Subtract => {
+    fn null_denotation(&mut self, token: Token) -> Result<Expr, Error> {
+        match &token.kind {
+            TokenKind::IntLiteral(i) => Ok(Expr::IntLiteral(*i)),
+            TokenKind::Identifier(i) => Ok(Expr::Identifier(i.clone())),
+            TokenKind::Subtract => {
                 let next_token = self.tokens.next();
-                let value = self.null_denotation(next_token);
-                Expr::UnaryOp { op: Op::Negate, value: Box::new(value) }
+                let value = self.null_denotation(next_token)?;
+                Ok(Expr::UnaryOp { op: Op::Negate, value: Box::new(value) })
             }
-            Token::LParen => {
-                let lhs = self.parse_expression( 0.0);
-                assert_eq!(self.tokens.next(), Token::RParen);
-                lhs
+            TokenKind::LParen => {
+                let lhs = self.parse_expression(0.0)?;
+                assert_eq!(self.tokens.next().kind, TokenKind::RParen);
+                Ok(lhs)
             },
-            t => panic!("Got \"{t}\', expected int"),
+            _ => Err(Error::wrong_token(self.filename.clone(), token)),
         }
     }
 }

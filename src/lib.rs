@@ -1,9 +1,11 @@
 pub mod lexing;
 pub mod parsing;
+pub mod error;
 
 use lexing::{
     Lexer,
-    Token
+    Token,
+    TokenKind
 };
 
 use parsing::{
@@ -14,20 +16,31 @@ use parsing::{
     Op
 };
 
+use std::{
+    process,
+    rc::Rc,
+    str::Lines
+};
+
 pub struct Interpreter<'a> {
+    _filename: Rc<str>,
+    lines: Lines<'a>,
     lexer: Lexer<'a>,
     parser: Parser,
     ast: Program
 }
 
 impl<'a> Interpreter<'a> {
-    pub fn new(source: &'a str) -> Self {
+    pub fn new(filename: Rc<str>, source: &'a str) -> Self {
+        let lines = source.lines();
 
         let lexer = Lexer::new(source);
-        let parser = Parser::new();
+        let parser = Parser::new(Rc::clone(&filename));
         let ast = Program::new();
 
         Self {
+            _filename: filename,
+            lines,
             lexer,
             parser,
             ast
@@ -35,11 +48,15 @@ impl<'a> Interpreter<'a> {
     }
 
     pub fn build_ast(&mut self) {
-        let tokens = self.lexer.tokenize();
-        let token_stream = TokenStream::new(tokens);
+        let (tokens, line_number, col) = self.lexer.tokenize();
+        let token_stream = TokenStream::new(tokens, line_number, col);
 
         self.parser.set_tokens(token_stream);
-        self.ast = self.parser.parse();
+        self.ast = self.parser.parse().unwrap_or_else(|err| {
+            let error = err.format_err(self.lines.nth((err.line - 1) as usize).unwrap());
+            eprintln!("error: {error}");
+            process::exit(1);
+        });
     }
 
     pub fn run(&mut self) {
@@ -97,13 +114,17 @@ fn evaluate_expr(expr: &mut Expr) -> i64 {
 pub struct TokenStream {
     tokens: Box<[Token]>,
     index: usize,
+    line_number: i32,
+    col: i32
 }
 
 impl TokenStream {
-    pub fn new(tokens: Vec<Token>) -> Self {
+    pub fn new(tokens: Vec<Token>, line_number: i32, col: i32) -> Self {
         Self {
             tokens: Box::from(tokens),
-            index: 0
+            index: 0,
+            line_number,
+            col
         }
     }
 
@@ -111,7 +132,7 @@ impl TokenStream {
         let token = self.tokens
             .get(self.index)
             .cloned()
-            .unwrap_or(Token::Eof);
+            .unwrap_or(Token::new(TokenKind::Eof, self.line_number, self.col, 1));
 
         self.index += 1;
         token
@@ -121,6 +142,6 @@ impl TokenStream {
         self.tokens
             .get(self.index)
             .cloned()
-            .unwrap_or(Token::Eof)
+            .unwrap_or(Token::new(TokenKind::Eof, self.line_number, self.col, 1))
     }
 }

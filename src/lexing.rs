@@ -9,8 +9,8 @@ use std::{
     }
 };
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Token {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TokenKind {
     IntLiteral(i64),
     Identifier(Rc<str>),
     Plus,
@@ -24,20 +24,39 @@ pub enum Token {
     Eof
 }
 
-impl Display for Token {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub line_number: i32,
+    pub col: i32,
+    pub length: i32,
+}
+
+impl Token {
+    pub fn new(kind: TokenKind, line_number: i32, col: i32, length: i32) -> Self {
+        Self {
+            kind,
+            line_number,
+            col,
+            length
+        }
+    }
+}
+
+impl Display for TokenKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Token::IntLiteral(n) => write!(f, "{n}"),
-            Token::Identifier(x) => write!(f, "{x}"),
-            Token::Plus => write!(f, "+"),
-            Token::Eof => write!(f, "EOF"),
-            Token::Times => write!(f, "*"),
-            Token::Divide => write!(f, "/"),
-            Token::Subtract => write!(f, "-"),
-            Token::LParen => write!(f, "("),
-            Token::RParen => write!(f, ")"),
-            Token::KwPrint => write!(f, "print"),
-            Token::Semicolon => write!(f, ";")
+            TokenKind::IntLiteral(n) => write!(f, "{n}"),
+            TokenKind::Identifier(x) => write!(f, "{x}"),
+            TokenKind::Plus => write!(f, "+"),
+            TokenKind::Eof => write!(f, "EOF"),
+            TokenKind::Times => write!(f, "*"),
+            TokenKind::Divide => write!(f, "/"),
+            TokenKind::Subtract => write!(f, "-"),
+            TokenKind::LParen => write!(f, "("),
+            TokenKind::RParen => write!(f, ")"),
+            TokenKind::KwPrint => write!(f, "print"),
+            TokenKind::Semicolon => write!(f, ";")
         }
     }
 }
@@ -51,41 +70,52 @@ impl<'a> Lexer<'a> {
         Self { chars: source.chars().peekable() }
     }
 
-    pub fn tokenize(&mut self) -> Vec<Token> {
+    pub fn tokenize(&mut self) -> (Vec<Token>, i32, i32) {
         let mut tokens: Vec<Token> = Vec::new();
+        let (mut line_number, mut col) = (1, 1);
 
         while let Some(c) = self.chars.next() {
             if c.is_ascii_digit() {
-                let int = self.build_int(c);
-                tokens.push(Token::IntLiteral(int));
+                let (int, length) = self.build_int(c);
+                tokens.push(Token::new(TokenKind::IntLiteral(int), line_number, col, length));
             }
 
             if c.is_ascii_alphabetic() || c == '_' {
                 let ident = self.build_ident(c);
                 match find_keyword(&ident) {
-                    Some(token) => tokens.push(token),
-                    None => tokens.push(Token::Identifier(ident)),
+                    Some(keyword) => tokens.push(Token::new(keyword, line_number, col, ident.len() as i32)),
+                    None => tokens.push(Token::new(TokenKind::Identifier(ident.clone()), line_number, col, ident.len() as i32)),
                 }
             }
 
+            if c == '\n' {
+                line_number += 1;
+                col = 0;
+            }
+
             tokens.push(match c {
-                '+' => Token::Plus,
-                '*' => Token::Times,
-                '/' => Token::Divide,
-                '-' => Token::Subtract,
-                '(' => Token::LParen,
-                ')' => Token::RParen,
-                ';' => Token::Semicolon,
-                _ => continue,
+                '+' => Token::new(TokenKind::Plus, line_number, col, 1),
+                '*' => Token::new(TokenKind::Times, line_number, col, 1),
+                '/' => Token::new(TokenKind::Divide, line_number, col, 1),
+                '-' => Token::new(TokenKind::Subtract, line_number, col, 1),
+                '(' => Token::new(TokenKind::LParen, line_number, col, 1),
+                ')' => Token::new(TokenKind::RParen, line_number, col, 1),
+                ';' => Token::new(TokenKind::Semicolon, line_number, col, 1),
+                _ => {
+                    col += 1;
+                    continue;
+                },
             });
+
+            col += 1;
             continue;
 
         }
 
-        tokens
+        (tokens, line_number, col)
     }
 
-    fn build_int(&mut self, first_digit: char) -> i64 {
+    fn build_int(&mut self, first_digit: char) -> (i64, i32) {
         let mut int = String::from(first_digit);
         
         while let Some(c) = self.chars.peek() {
@@ -97,7 +127,10 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        int.parse::<i64>().unwrap()
+        let length = int.len() as i32;
+        let int = int.parse::<i64>().unwrap();
+
+        (int, length)
     }
 
     fn build_ident(&mut self, first_letter: char) -> Rc<str> {
@@ -116,9 +149,9 @@ impl<'a> Lexer<'a> {
     }
 }
 
-fn find_keyword(ident: &str) -> Option<Token> {
+fn find_keyword(ident: &str) -> Option<TokenKind> {
     match ident {
-        "print" => Some(Token::KwPrint),
+        "print" => Some(TokenKind::KwPrint),
         _ => None
     }
 }
